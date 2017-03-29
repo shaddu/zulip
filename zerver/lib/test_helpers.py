@@ -211,10 +211,6 @@ def find_pattern_in_email(address, pattern):
             return key_regex.search(message.body).group(0)
     return None  # nocoverage -- in theory a test might want this case, but none do
 
-def message_ids(result):
-    # type: (Dict[str, Any]) -> Set[int]
-    return set(message['id'] for message in result['messages'])
-
 def message_stream_count(user_profile):
     # type: (UserProfile) -> int
     return UserMessage.objects. \
@@ -390,10 +386,15 @@ def write_instrumentation_reports(full_suite):
         assert len(pattern_cnt) > 100
         untested_patterns = set([p for p in pattern_cnt if pattern_cnt[p] == 0])
 
-        # We exempt some patterns that are called via Tornado.
         exempt_patterns = set([
+            # We exempt some patterns that are called via Tornado.
             'api/v1/events',
             'api/v1/register',
+            # We also exempt some development environment debugging
+            # static content URLs, since the content they point to may
+            # or may not exist.
+            'coverage/(?P<path>.*)',
+            'docs/(?P<path>.*)',
         ])
 
         untested_patterns -= exempt_patterns

@@ -165,8 +165,9 @@ class NarrowBuilder(object):
 
     def by_stream(self, query, operand, maybe_negate):
         # type: (Query, str, ConditionTransform) -> Query
-        stream = get_stream(operand, self.user_profile.realm)
-        if stream is None:
+        try:
+            stream = get_stream(operand, self.user_profile.realm)
+        except Stream.DoesNotExist:
             raise BadNarrowOperator('unknown stream ' + operand)
 
         if self.user_profile.realm.is_zephyr_mirror_realm:
@@ -386,13 +387,12 @@ def get_search_fields(rendered_content, subject, content_matches, subject_matche
 def narrow_parameter(json):
     # type: (str) -> Optional[List[Dict[str, Any]]]
 
-    # FIXME: A hack to support old mobile clients
-    if json == '{}':
-        return None
-
     data = ujson.loads(json)
     if not isinstance(data, list):
         raise ValueError("argument is not a list")
+    if len(data) == 0:
+        # The "empty narrow" should be None, and not []
+        return None
 
     def convert_term(elem):
         # type: (Union[Dict, List]) -> Dict[str, Any]
@@ -438,8 +438,9 @@ def is_public_stream(stream_name, realm):
     False in that situation, and subsequent code will do
     validation and raise the appropriate JsonableError.
     """
-    stream = get_stream(stream_name, realm)
-    if stream is None:
+    try:
+        stream = get_stream(stream_name, realm)
+    except Stream.DoesNotExist:
         return False
     return stream.is_public()
 
@@ -473,10 +474,11 @@ def ok_to_include_history(narrow, realm):
     return include_history
 
 def get_stream_name_from_narrow(narrow):
-    # type: (Iterable[Dict[str, Any]]) -> Optional[Text]
-    for term in narrow:
-        if term['operator'] == 'stream':
-            return term['operand'].lower()
+    # type: (Optional[Iterable[Dict[str, Any]]]) -> Optional[Text]
+    if narrow is not None:
+        for term in narrow:
+            if term['operator'] == 'stream':
+                return term['operand'].lower()
     return None
 
 def exclude_muting_conditions(user_profile, narrow):
@@ -526,21 +528,21 @@ def exclude_muting_conditions(user_profile, narrow):
     return conditions
 
 @has_request_variables
-def get_old_messages_backend(request, user_profile,
-                             anchor = REQ(converter=int),
-                             num_before = REQ(converter=to_non_negative_int),
-                             num_after = REQ(converter=to_non_negative_int),
-                             narrow = REQ('narrow', converter=narrow_parameter, default=None),
-                             use_first_unread_anchor = REQ(default=False, converter=ujson.loads),
-                             apply_markdown=REQ(default=True,
-                                                converter=ujson.loads)):
+def get_messages_backend(request, user_profile,
+                         anchor = REQ(converter=int),
+                         num_before = REQ(converter=to_non_negative_int),
+                         num_after = REQ(converter=to_non_negative_int),
+                         narrow = REQ('narrow', converter=narrow_parameter, default=None),
+                         use_first_unread_anchor = REQ(default=False, converter=ujson.loads),
+                         apply_markdown=REQ(default=True,
+                                            converter=ujson.loads)):
     # type: (HttpRequest, UserProfile, int, int, int, Optional[List[Dict[str, Any]]], bool, bool) -> HttpResponse
     include_history = ok_to_include_history(narrow, user_profile.realm)
 
     if include_history and not use_first_unread_anchor:
         query = select([column("id").label("message_id")], None, table("zerver_message"))
         inner_msg_id_col = literal_column("zerver_message.id")
-    elif narrow is None:
+    elif narrow is None and not use_first_unread_anchor:
         query = select([column("message_id"), column("flags")],
                        column("user_profile_id") == literal(user_profile.id),
                        table("zerver_usermessage"))
@@ -643,7 +645,7 @@ def get_old_messages_backend(request, user_profile,
     main_query = alias(query)
     query = select(main_query.c, None, main_query).order_by(column("message_id").asc())
     # This is a hack to tag the query we use for testing
-    query = query.prefix_with("/* get_old_messages */")
+    query = query.prefix_with("/* get_messages */")
     query_result = list(sa_conn.execute(query).fetchall())
 
     # The following is a little messy, but ensures that the code paths
@@ -724,8 +726,9 @@ def update_message_flags(request, user_profile,
     request._log_data["extra"] = log_data_str
     stream = None
     if stream_name is not None:
-        stream = get_stream(stream_name, user_profile.realm)
-        if not stream:
+        try:
+            stream = get_stream(stream_name, user_profile.realm)
+        except Stream.DoesNotExist:
             raise JsonableError(_('No such stream \'%s\'') % (stream_name,))
         if topic_name:
             topic_exists = UserMessage.objects.filter(user_profile=user_profile,
@@ -972,6 +975,7 @@ def update_message_backend(request, user_profile,
     message, ignored_user_message = access_message(user_profile, message_id)
 
     # You only have permission to edit a message if:
+    # you change this value also change those two parameters in message_edit.js.
     # 1. You sent it, OR:
     # 2. This is a topic-only edit for a (no topic) message, OR:
     # 3. This is a topic-only edit and you are an admin.
@@ -1034,7 +1038,7 @@ def update_message_backend(request, user_profile,
                                        propagate_mode, content, rendered_content)
     # Include the number of messages changed in the logs
     request._log_data['extra'] = "[%s]" % (number_changed,)
-    if links_for_embed and getattr(settings, 'INLINE_URL_EMBED_PREVIEW', None):
+    if links_for_embed and bugdown.url_embed_preview_enabled_for_realm(message):
         event_data = {
             'message_id': message.id,
             'message_content': message.content,
@@ -1073,7 +1077,7 @@ def json_messages_in_narrow(request, user_profile):
 def messages_in_narrow_backend(request, user_profile,
                                msg_ids = REQ(validator=check_list(check_int)),
                                narrow = REQ(converter=narrow_parameter)):
-    # type: (HttpRequest, UserProfile, List[int], List[Dict[str, Any]]) -> HttpResponse
+    # type: (HttpRequest, UserProfile, List[int], Optional[List[Dict[str, Any]]]) -> HttpResponse
 
     # Note that this function will only work on messages the user
     # actually received
@@ -1090,8 +1094,9 @@ def messages_in_narrow_backend(request, user_profile,
                         literal_column("zerver_message.id")))
 
     builder = NarrowBuilder(user_profile, column("message_id"))
-    for term in narrow:
-        query = builder.add_term(query, term)
+    if narrow is not None:
+        for term in narrow:
+            query = builder.add_term(query, term)
 
     sa_conn = get_sqlalchemy_connection()
     query_result = list(sa_conn.execute(query).fetchall())

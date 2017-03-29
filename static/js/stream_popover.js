@@ -203,7 +203,7 @@ exports.register_stream_handlers = function () {
     $('body').on('click', '.compose_to_stream', function (e) {
         var sub = stream_popover_sub(e);
         exports.hide_stream_popover();
-        compose.start('stream', {stream: sub.name, trigger: 'sidebar stream actions'});
+        compose_actions.start('stream', {stream: sub.name, trigger: 'sidebar stream actions'});
         e.stopPropagation();
     });
 
@@ -211,7 +211,7 @@ exports.register_stream_handlers = function () {
     $('body').on('click', '.mark_stream_as_read', function (e) {
         var sub = stream_popover_sub(e);
         exports.hide_stream_popover();
-        unread_ui.mark_stream_as_read(sub.name);
+        unread_ops.mark_stream_as_read(sub.name);
         e.stopPropagation();
     });
 
@@ -271,25 +271,6 @@ function topic_popover_sub(e) {
     return sub;
 }
 
-exports.topic_ops = {
-    mute: function (stream, topic) {
-        exports.hide_topic_popover();
-        muting_ui.mute_topic(stream, topic);
-        muting_ui.persist_and_rerender();
-        muting_ui.notify_with_undo_option(stream, topic);
-        muting_ui.set_up_muted_topics_ui(muting.get_muted_topics());
-    },
-    // we don't run a unmute_notify function because it isn't an issue as much
-    // if someone accidentally unmutes a stream rather than if they mute it
-    // and miss out on info.
-    unmute: function (stream, topic) {
-        exports.hide_topic_popover();
-        muting_ui.unmute_topic(stream, topic);
-        muting_ui.persist_and_rerender();
-        muting_ui.set_up_muted_topics_ui(muting.get_muted_topics());
-    },
-};
-
 exports.register_topic_handlers = function () {
     // Narrow to topic
     $('body').on('click', '.narrow_to_topic', function (e) {
@@ -320,7 +301,7 @@ exports.register_topic_handlers = function () {
         }
 
         var topic = $(e.currentTarget).attr('data-topic-name');
-        exports.topic_ops.mute(sub.name, topic);
+        muting_ui.mute(sub.name, topic);
         e.stopPropagation();
         e.preventDefault();
     });
@@ -333,7 +314,7 @@ exports.register_topic_handlers = function () {
         }
 
         var topic = $(e.currentTarget).attr('data-topic-name');
-        exports.topic_ops.unmute(sub.name, topic);
+        muting_ui.unmute(sub.name, topic);
         e.stopPropagation();
         e.preventDefault();
     });
@@ -347,7 +328,7 @@ exports.register_topic_handlers = function () {
 
         var topic = $(e.currentTarget).attr('data-topic-name');
         exports.hide_topic_popover();
-        unread_ui.mark_topic_as_read(sub.name, topic);
+        unread_ops.mark_topic_as_read(sub.name, topic);
         e.stopPropagation();
     });
 };

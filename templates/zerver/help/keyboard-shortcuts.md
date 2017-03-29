@@ -34,7 +34,7 @@ Zulip keyboard shortcuts are divided into four categories:
 * **Scroll down**: `J`, `Spacebar`, or `PgDn` (`Fn` + `↓` on Mac) -
   This shortcut allows the user to scroll down through the messages in
   their view.
-* **Last message**: `End` (`Fn`+`⇾` on Mac) - This shortcut
+* **Last message**: `End` (`Fn`+`⇾` on Mac) or `G` - This shortcut
   allows the user to scroll to the most recent message in their view.
 * **First message in view**: `Home` (`Fn`+`⇽` on Mac) - This shortcut
   allows the user to scroll to the most recent message in their view.
@@ -57,6 +57,8 @@ Zulip keyboard shortcuts are divided into four categories:
   shortcut allows the user to send the message that they've written.
 * **Cancel compose**: `Esc` - This shortcut allows the user to cancel
   and discard their unsent message.
+* **View drafts**: `d` - This shortcut allows the user to open the
+  drafts overlay.
 
 ## Narrowing
 
@@ -65,7 +67,7 @@ Zulip keyboard shortcuts are divided into four categories:
   blue).
 * **Narrow by topic**: `S` - This shortcut narrows the view to show all
   messages with the topic of the selected message (outlined in blue).
-* **Narrow to all private messages**: `v` - This shortcut narrows the
+* **Narrow to all private messages**: `P` - This shortcut narrows the
   view to show all of the user's private messages.
 * **Cycle between stream narrows**: `A` and `D` - This shortcut allows the
   user to cycle through the narrows showing the messages of a stream
@@ -80,6 +82,8 @@ Zulip keyboard shortcuts are divided into four categories:
 * **Open message actions menu**: `i` - This shortcut shows the
   available message actions of the selected message (outlined in
   blue).
+* **Open lightbox for selected message**: `v` - This opens the lightbox
+  if the selected message has images or videos embedded.
 * **Edit last message you sent**: `⇽` - This starts editing the
   last editable message that you sent in the current view (if any).
 * **Edit selected message**: `i` then `Enter` (`Return` on Mac) -
@@ -87,5 +91,16 @@ Zulip keyboard shortcuts are divided into four categories:
   in blue) if the user authored the selected message. If the selected
   message was written by another user, this shortcut will enable the
   user to view the source code of the message.
+* **Toggle starred flag**: `*` - This shortcut stars the selected
+  message.
 * **Show the keyboard shortcuts**: `?` - This shortcut makes a modal
   window with a guide to all possible keyboard shortcuts appear.
+* **Open gear menu**: `g` - This shortcut opens the page's upper-right
+  gear menu.
+* **Open reaction popover menu**: `:` - This shortcut shows the
+  reaction popover menu of the selected message (outlined in blue).
+* **React to selected message with +1**: `+` - This shortcut allows
+  you to react to the selected message (outlined in blue) with the
+  +1 (thumbs up) emoji.
+* **Mute/Unmute topic**: `M` - This shortcut toggles the selected
+  message's (outlined in blue) topic between muted and unmuted.

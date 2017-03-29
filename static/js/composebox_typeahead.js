@@ -13,16 +13,6 @@ var composebox_typeahead = (function () {
 
 var exports = {};
 
-// Returns an array of private message recipients, removing empty elements.
-// For example, "a,,b, " => ["a", "b"]
-exports.get_cleaned_pm_recipients = function (query_string) {
-    var recipients = util.extract_pm_recipients(query_string);
-    recipients = _.filter(recipients, function (elem) {
-        return elem.match(/\S/);
-    });
-    return recipients;
-};
-
 var seen_topics = new Dict();
 
 exports.add_topic = function (uc_stream, uc_topic) {
@@ -132,7 +122,7 @@ function handle_keydown(e) {
             // takes the typeaheads a little time to open after the user finishes typing, which
             // can lead to the focus moving without the autocomplete having a chance to happen.
             if (nextFocus) {
-                ui.focus_on(nextFocus);
+                ui_util.focus_on(nextFocus);
                 nextFocus = false;
             }
 
@@ -159,7 +149,7 @@ function handle_keyup(e) {
     var code = e.keyCode || e.which;
     if (code === 13 || (code === 9 && !e.shiftKey)) { // Enter key or tab key
         if (nextFocus) {
-            ui.focus_on(nextFocus);
+            ui_util.focus_on(nextFocus);
             nextFocus = false;
         }
     }
@@ -369,7 +359,7 @@ exports.initialize_compose_typeahead = function (selector, completions) {
             if (this.completing === 'emoji') {
                 return typeahead_helper.sort_emojis(matches, this.token);
             } else if (this.completing === 'mention') {
-                return typeahead_helper.sort_recipients(matches, this.token);
+                return typeahead_helper.sort_recipients(matches, this.token, compose.stream_name());
             } else if (this.completing === 'stream') {
                 return typeahead_helper.sort_streams(matches, this.token);
             }
@@ -477,16 +467,20 @@ exports.initialize = function () {
 
             return query_matches_person(current_recipient, item);
         },
-        sorter: typeahead_helper.sort_recipientbox_typeahead,
+        sorter: function (matches) {
+            var current_stream = compose.stream_name();
+            return typeahead_helper.sort_recipientbox_typeahead(
+                this.query, matches, current_stream);
+        },
         updater: function (item, event) {
-            var previous_recipients = exports.get_cleaned_pm_recipients(this.query);
+            var previous_recipients = typeahead_helper.get_cleaned_pm_recipients(this.query);
             previous_recipients.pop();
             previous_recipients = previous_recipients.join(", ");
             if (previous_recipients.length !== 0) {
                 previous_recipients += ", ";
             }
             if (event && event.type === 'click') {
-                ui.focus_on('private_message_recipient');
+                ui_util.focus_on('private_message_recipient');
             }
             return previous_recipients + item.email + ", ";
         },
@@ -497,7 +491,7 @@ exports.initialize = function () {
 
     $( "#private_message_recipient" ).blur(function () {
         var val = $(this).val();
-        var recipients = exports.get_cleaned_pm_recipients(val);
+        var recipients = typeahead_helper.get_cleaned_pm_recipients(val);
         $(this).val(recipients.join(", "));
     });
 };

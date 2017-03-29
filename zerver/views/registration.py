@@ -197,16 +197,10 @@ def accounts_register(request):
 
         # FIXME: sanitize email addresses and fullname
         if existing_user_profile is not None and existing_user_profile.is_mirror_dummy:
-            try:
-                user_profile = existing_user_profile
-                do_activate_user(user_profile)
-                do_change_password(user_profile, password)
-                do_change_full_name(user_profile, full_name)
-            except UserProfile.DoesNotExist:
-                user_profile = do_create_user(email, password, realm, full_name, short_name,
-                                              prereg_user=prereg_user,
-                                              tos_version=settings.TOS_VERSION,
-                                              newsletter_data={"IP": request.META['REMOTE_ADDR']})
+            user_profile = existing_user_profile
+            do_activate_user(user_profile)
+            do_change_password(user_profile, password)
+            do_change_full_name(user_profile, full_name)
         else:
             user_profile = do_create_user(email, password, realm, full_name, short_name,
                                           prereg_user=prereg_user,
@@ -251,6 +245,10 @@ def accounts_register(request):
                  'creating_new_team': realm_creation,
                  'realms_have_subdomains': settings.REALMS_HAVE_SUBDOMAINS,
                  'password_auth_enabled': password_auth_enabled(realm),
+                 'MAX_REALM_NAME_LENGTH': str(Realm.MAX_REALM_NAME_LENGTH),
+                 'MAX_NAME_LENGTH': str(UserProfile.MAX_NAME_LENGTH),
+                 'MAX_PASSWORD_LENGTH': str(form.MAX_PASSWORD_LENGTH),
+                 'MAX_REALM_SUBDOMAIN_LENGTH': str(Realm.MAX_REALM_SUBDOMAIN_LENGTH)
                  }
     )
 

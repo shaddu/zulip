@@ -19,6 +19,7 @@ add_dependencies({
     compose_fade: 'js/compose_fade.js',
     people: 'js/people.js',
     unread: 'js/unread.js',
+    hash_util: 'js/hash_util.js',
     hashchange: 'js/hashchange.js',
     narrow: 'js/narrow.js',
     activity: 'js/activity.js',
@@ -282,11 +283,11 @@ global.compile_template('user_presence_rows');
     activity.set_presence_info(presences, base_time);
 
     assert.deepEqual(activity.presence_info[alice.user_id],
-        { status: 'active', mobile: false}
+        { status: 'active', mobile: false, last_active: 500}
     );
 
     assert.deepEqual(activity.presence_info[fred.user_id],
-        { status: 'idle', mobile: false}
+        { status: 'idle', mobile: false, last_active: 500}
     );
 }());
 
@@ -346,4 +347,3 @@ activity.presence_info[norbert.user_id] = { status: activity.ACTIVE };
         },
     ]);
 }());
-

@@ -22,29 +22,21 @@ EXCLUDED_FILES = [
     "tools/tests/test_template_data",
 ]
 
-def check_our_files():
-    # type: () -> None
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-m', '--modified',
-                        action='store_true', default=False,
-                        help='only check modified files')
-    parser.add_argument('--all-dups',
-                        action="store_true", default=False,
-                        help='Run lint tool to detect duplicate ids on ignored files as well')
-    args = parser.parse_args()
-
+def check_our_files(modified_only, all_dups, targets):
+    # type: (bool, bool, List[str]) -> None
     by_lang = cast(
         Dict[str, List[str]],
         lister.list_files(
+            targets=targets,
             modified_only=args.modified,
             ftypes=['handlebars', 'html'],
             group_by_ftype=True, exclude=EXCLUDED_FILES))
 
-    check_handlebar_templates(by_lang['handlebars'], args.modified)
-    check_html_templates(by_lang['html'], args.modified, args.all_dups)
+    check_handlebar_templates(by_lang['handlebars'])
+    check_html_templates(by_lang['html'], args.all_dups)
 
-def check_html_templates(templates, modified_only, all_dups):
-    # type: (Iterable[str], bool, bool) -> None
+def check_html_templates(templates, all_dups):
+    # type: (Iterable[str], bool) -> None
     # Our files with .html extensions are usually for Django, but we also
     # have a few static .html files.
     # The file base.html has a bit of funny HTML that we can't parse here yet.
@@ -98,8 +90,6 @@ def check_html_templates(templates, modified_only, all_dups):
         print('Exiting--please clean up all duplicates before running this again.')
         sys.exit(1)
 
-    if not modified_only:
-        assert len(templates) >= 10 # sanity check that we are actually doing work
     for fn in templates:
         # Many of our Django templates have strange indentation.  The
         # indentation errors are often harmless, even stylistically
@@ -196,12 +186,10 @@ def check_html_templates(templates, modified_only, all_dups):
             if not validate_indent_html(fn):
                 sys.exit(1)
 
-def check_handlebar_templates(templates, modified_only):
-    # type: (Iterable[str], bool) -> None
+def check_handlebar_templates(templates):
+    # type: (Iterable[str]) -> None
     # Check all our handlebars templates.
     templates = [fn for fn in templates if fn.endswith('.handlebars')]
-    if not modified_only:
-        assert len(templates) >= 10 # sanity check that we are actually doing work
     for fn in templates:
         validate(fn=fn, check_indent=True)
 
@@ -249,4 +237,13 @@ def check_handlebar_templates(templates, modified_only):
                 sys.exit(1)
 
 if __name__ == '__main__':
-    check_our_files()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-m', '--modified',
+                        action='store_true', default=False,
+                        help='only check modified files')
+    parser.add_argument('--all-dups',
+                        action="store_true", default=False,
+                        help='Run lint tool to detect duplicate ids on ignored files as well')
+    parser.add_argument('targets', nargs=argparse.REMAINDER)
+    args = parser.parse_args()
+    check_our_files(args.modified, args.all_dups, args.targets)

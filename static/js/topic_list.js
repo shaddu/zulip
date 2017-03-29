@@ -210,8 +210,8 @@ exports.set_click_handlers = function (callbacks) {
 
         // In a more componentized world, we would delegate some
         // of this stuff back up to our parents.
-        if (ui.home_tab_obscured()) {
-            ui.change_tab_to('#home');
+        if (ui_state.home_tab_obscured()) {
+            ui_util.change_tab_to('#home');
         }
 
         var stream = $(e.target).parents('ul').attr('data-stream');

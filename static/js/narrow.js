@@ -191,10 +191,10 @@ exports.activate = function (raw_operators, opts) {
                                 trigger: opts ? opts.trigger : undefined,
                                 previous_id: current_msg_list.selected_id()});
 
-    var had_message_content = compose.has_message_content();
+    var had_message_content = compose_state.has_message_content();
 
     if (!had_message_content) {
-        compose.cancel();
+        compose_actions.cancel();
     } else {
         compose_fade.update_message_list();
     }
@@ -275,7 +275,7 @@ exports.activate = function (raw_operators, opts) {
     $("#zfilt").addClass("focused_table");
     $("#zhome").removeClass("focused_table");
 
-    ui.change_tab_to('#home');
+    ui_util.change_tab_to('#home');
     message_list.narrowed = msg_list;
     current_msg_list = message_list.narrowed;
 
@@ -315,12 +315,12 @@ exports.activate = function (raw_operators, opts) {
     // the message we want anyway or if the filter can't be applied
     // locally.
     if (message_list.all.get(then_select_id) !== undefined && current_filter.can_apply_locally()) {
-        message_store.add_messages(message_list.all.all_messages(), message_list.narrowed,
+        message_util.add_messages(message_list.all.all_messages(), message_list.narrowed,
                                    {delay_render: true});
     }
 
     var defer_selecting_closest = message_list.narrowed.empty();
-    message_store.load_old_messages({
+    message_fetch.load_old_messages({
         anchor: then_select_id.toFixed(),
         num_before: 50,
         num_after: 50,
@@ -338,7 +338,7 @@ exports.activate = function (raw_operators, opts) {
     });
 
     if (! defer_selecting_closest) {
-        message_store.reset_load_more_status();
+        message_fetch.reset_load_more_status();
         maybe_select_closest();
     } else {
         ui.show_loading_more_messages_indicator();
@@ -357,9 +357,9 @@ exports.activate = function (raw_operators, opts) {
 
     if (!had_message_content && opts.trigger === 'sidebar' && exports.narrowed_by_reply()) {
         if (exports.narrowed_to_topic()) {
-            compose.start('stream');
+            compose_actions.start('stream');
         } else {
-            compose.start('private');
+            compose_actions.start('private');
         }
     }
 
@@ -388,7 +388,7 @@ exports.by_subject = function (target_id, opts) {
         exports.by_recipient(target_id, opts);
         return;
     }
-    unread_ui.mark_message_as_read(original);
+    unread_ops.mark_message_as_read(original);
     var search_terms = [
         {operator: 'stream', operand: original.stream},
         {operator: 'topic', operand: original.subject},
@@ -402,7 +402,7 @@ exports.by_recipient = function (target_id, opts) {
     opts = _.defaults({}, opts, {then_select_id: target_id});
     // don't use current_msg_list as it won't work for muted messages or for out-of-narrow links
     var message = message_store.get(target_id);
-    unread_ui.mark_message_as_read(message);
+    unread_ops.mark_message_as_read(message);
     switch (message.type) {
     case 'private':
         exports.by('pm-with', message.reply_to, opts);
@@ -453,8 +453,8 @@ exports.deactivate = function () {
         return;
     }
 
-    if (!compose.has_message_content()) {
-        compose.cancel();
+    if (!compose_state.has_message_content()) {
+        compose_actions.cancel();
     }
 
     current_filter = undefined;
@@ -468,7 +468,7 @@ exports.deactivate = function () {
     condense.condense_and_collapse($("#zhome tr.message_row"));
 
     $('#search_query').val('');
-    message_store.reset_load_more_status();
+    message_fetch.reset_load_more_status();
     hashchange.save_narrow();
 
     if (current_msg_list.selected_id() !== -1) {
@@ -530,7 +530,7 @@ exports.restore_home_state = function () {
     // If we click on the Home link from another nav pane, just go
     // back to the state you were in (possibly still narrowed) before
     // you left the Home pane.
-    if (!ui.home_tab_obscured()) {
+    if (!ui_state.home_tab_obscured()) {
         exports.deactivate();
     }
     navigate.maybe_scroll_to_selected();
@@ -603,7 +603,7 @@ exports.huddle_with_uri = function (user_ids_string) {
     // This method is convenient is convenient for callers
     // that have already converted emails to a comma-delimited
     // list of user_ids.  We should be careful to keep this
-    // consistent with hashchange.decode_operand.
+    // consistent with hash_util.decode_operand.
     return "#narrow/pm-with/" + user_ids_string + '-group';
 };
 
@@ -614,30 +614,30 @@ exports.by_sender_uri = function (reply_to) {
 };
 
 exports.by_stream_uri = function (stream) {
-    return "#narrow/stream/" + hashchange.encodeHashComponent(stream);
+    return "#narrow/stream/" + hash_util.encodeHashComponent(stream);
 };
 
 exports.by_stream_subject_uri = function (stream, subject) {
-    return "#narrow/stream/" + hashchange.encodeHashComponent(stream) +
-           "/subject/" + hashchange.encodeHashComponent(subject);
+    return "#narrow/stream/" + hash_util.encodeHashComponent(stream) +
+           "/subject/" + hash_util.encodeHashComponent(subject);
 };
 
 exports.by_message_uri = function (message_id) {
-    return "#narrow/id/" + hashchange.encodeHashComponent(message_id);
+    return "#narrow/id/" + hash_util.encodeHashComponent(message_id);
 };
 
 exports.by_near_uri = function (message_id) {
-    return "#narrow/near/" + hashchange.encodeHashComponent(message_id);
+    return "#narrow/near/" + hash_util.encodeHashComponent(message_id);
 };
 
 exports.by_conversation_and_time_uri = function (message) {
     if (message.type === "stream") {
-        return "#narrow/stream/" + hashchange.encodeHashComponent(message.stream) +
-            "/subject/" + hashchange.encodeHashComponent(message.subject) +
-            "/near/" + hashchange.encodeHashComponent(message.id);
+        return "#narrow/stream/" + hash_util.encodeHashComponent(message.stream) +
+            "/subject/" + hash_util.encodeHashComponent(message.subject) +
+            "/near/" + hash_util.encodeHashComponent(message.id);
     }
-    return "#narrow/pm-with/" + hashchange.encodeHashComponent(message.reply_to) +
-        "/near/" + hashchange.encodeHashComponent(message.id);
+    return "#narrow/pm-with/" + hash_util.encodeHashComponent(message.reply_to) +
+        "/near/" + hash_util.encodeHashComponent(message.id);
 };
 
 // Are we narrowed to PMs: all PMs or PMs with particular people.

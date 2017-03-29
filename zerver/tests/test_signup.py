@@ -33,8 +33,11 @@ from zerver.lib.actions import (
 )
 
 from zerver.lib.initial_password import initial_password
-from zerver.lib.actions import do_deactivate_realm, do_set_realm_default_language, \
-    add_new_user_history
+from zerver.lib.actions import (
+    do_deactivate_realm,
+    do_set_realm_property,
+    add_new_user_history,
+)
 from zerver.lib.digest import send_digest_email
 from zerver.lib.notifications import (
     enqueue_welcome_emails, one_click_unsubscribe_link, send_local_email_template_with_delay)
@@ -534,6 +537,31 @@ so we didn't send them an invitation. We did send invitations to everyone else!"
         self.assert_json_success(self.invite(external_address, ["Denmark"]))
         self.check_sent_emails([external_address])
 
+    def test_invite_outside_domain_before_closing(self):
+        # type: () -> None
+        """
+        If you invite someone with a different domain from that of the realm
+        when `restricted_to_domain = False`, but `restricted_to_domain` later
+        changes to true, the invitation should succeed but the invitee's signup
+        attempt should fail.
+        """
+        zulip_realm = get_realm("zulip")
+        zulip_realm.restricted_to_domain = False
+        zulip_realm.save()
+
+        self.login("hamlet@zulip.com")
+        external_address = "foo@example.com"
+
+        self.assert_json_success(self.invite(external_address, ["Denmark"]))
+        self.check_sent_emails([external_address])
+
+        zulip_realm.restricted_to_domain = True
+        zulip_realm.save()
+
+        result = self.submit_reg_form_for_user("foo@example.com", "password")
+        self.assertEqual(result.status_code, 200)
+        self.assert_in_response("only allows users with e-mail", result)
+
     def test_invite_with_non_ascii_streams(self):
         # type: () -> None
         """
@@ -917,7 +945,7 @@ class UserSignUpTest(ZulipTestCase):
         email = "newguy@zulip.com"
         password = "newpassword"
         realm = get_realm('zulip')
-        do_set_realm_default_language(realm, "de")
+        do_set_realm_property(realm, 'default_language', u"de")
 
         result = self.client_post('/accounts/home/', {'email': email})
         self.assertEqual(result.status_code, 302)
@@ -972,7 +1000,115 @@ class UserSignUpTest(ZulipTestCase):
 
         # Pick a password and agree to the ToS.
         result = self.submit_reg_form_for_user(email, password, full_name="<invalid>")
-        self.assert_in_success_response("Invalid characters in name!", result)
+        self.assert_in_success_response(["Invalid characters in name!"], result)
+
+    def test_signup_without_password(self):
+        # type: () -> None
+        """
+        Check if signing up without a password works properly when
+        password_auth_enabled is False.
+        """
+
+        email = "newuser@zulip.com"
+
+        result = self.client_post('/accounts/home/', {'email': email})
+        self.assertEqual(result.status_code, 302)
+        self.assertTrue(result["Location"].endswith(
+            "/accounts/send_confirm/%s" % (email,)))
+        result = self.client_get(result["Location"])
+        self.assert_in_response("Check your email so we can get started.", result)
+
+        # Visit the confirmation link.
+        confirmation_url = self.get_confirmation_url_from_outbox(email)
+        result = self.client_get(confirmation_url)
+        self.assertEqual(result.status_code, 200)
+
+        with patch('zerver.views.registration.password_auth_enabled', return_value=False):
+            result = self.client_post(
+                '/accounts/register/',
+                {'full_name': 'New User',
+                 'realm_name': 'Zulip Test',
+                 'realm_subdomain': 'zuliptest',
+                 'key': find_key_by_email(email),
+                 'realm_org_type': Realm.COMMUNITY,
+                 'terms': True})
+
+        # User should now be logged in.
+        self.assertEqual(result.status_code, 302)
+        user_profile = get_user_profile_by_email(email)
+        self.assertEqual(get_session_dict_user(self.client.session), user_profile.id)
+
+    def test_signup_without_full_name(self):
+        # type: () -> None
+        """
+        Check if signing up without a full name redirects to a registration
+        form.
+        """
+        email = "newguy@zulip.com"
+        password = "newpassword"
+
+        result = self.client_post('/accounts/home/', {'email': email})
+        self.assertEqual(result.status_code, 302)
+        self.assertTrue(result["Location"].endswith(
+            "/accounts/send_confirm/%s" % (email,)))
+        result = self.client_get(result["Location"])
+        self.assert_in_response("Check your email so we can get started.", result)
+
+        # Visit the confirmation link.
+        confirmation_url = self.get_confirmation_url_from_outbox(email)
+        result = self.client_get(confirmation_url)
+        self.assertEqual(result.status_code, 200)
+
+        result = self.client_post(
+            '/accounts/register/',
+            {'password': password,
+             'realm_name': 'Zulip Test',
+             'realm_subdomain': 'zuliptest',
+             'key': find_key_by_email(email),
+             'realm_org_type': Realm.COMMUNITY,
+             'terms': True,
+             'from_confirmation': '1'})
+        self.assert_in_success_response(["You're almost there."], result)
+
+    def test_signup_invalid_subdomain(self):
+        # type: () -> None
+        """
+        Check if attempting to authenticate to the wrong subdomain logs an
+        error and redirects.
+        """
+        email = "newuser@zulip.com"
+        password = "newpassword"
+
+        result = self.client_post('/accounts/home/', {'email': email})
+        self.assertEqual(result.status_code, 302)
+        self.assertTrue(result["Location"].endswith(
+            "/accounts/send_confirm/%s" % (email,)))
+        result = self.client_get(result["Location"])
+        self.assert_in_response("Check your email so we can get started.", result)
+
+        # Visit the confirmation link.
+        confirmation_url = self.get_confirmation_url_from_outbox(email)
+        result = self.client_get(confirmation_url)
+        self.assertEqual(result.status_code, 200)
+
+        def invalid_subdomain(**kwargs):
+            # type: (**Any) -> Any
+            return_data = kwargs.get('return_data', {})
+            return_data['invalid_subdomain'] = True
+
+        with patch('zerver.views.registration.authenticate', side_effect=invalid_subdomain):
+            with patch('logging.error') as mock_error:
+                result = self.client_post(
+                    '/accounts/register/',
+                    {'password': password,
+                     'full_name': 'New User',
+                     'realm_name': 'Zulip Test',
+                     'realm_subdomain': 'zuliptest',
+                     'key': find_key_by_email(email),
+                     'realm_org_type': Realm.COMMUNITY,
+                     'terms': True})
+        mock_error.assert_called_once()
+        self.assertEqual(result.status_code, 302)
 
     def test_unique_completely_open_domain(self):
         # type: () -> None
@@ -1165,6 +1301,24 @@ class UserSignUpTest(ZulipTestCase):
                 AUTH_LDAP_USER_DN_TEMPLATE='uid=%(user)s,ou=users,dc=zulip,dc=com'):
             result = self.client_get(confirmation_url)
             self.assertEqual(result.status_code, 200)
+
+            # The full_name should not be overriden by the value from LDAP if
+            # request.session['authenticated_full_name'] has not been set yet.
+            with patch('zerver.views.registration.name_changes_disabled', return_value=True):
+                result = self.submit_reg_form_for_user(email,
+                                                       password,
+                                                       full_name="Non LDAP Full Name",
+                                                       realm_name=realm_name,
+                                                       realm_subdomain=subdomain,
+                                                       # Pass HTTP_HOST for the target subdomain
+                                                       HTTP_HOST=subdomain + ".testserver")
+            self.assert_in_success_response(["You're almost there.",
+                                             "Non LDAP Full Name",
+                                             "newuser@zulip.com"],
+                                            result)
+
+            # Submitting the registration form with from_confirmation='1' sets
+            # the value of request.session['authenticated_full_name'] from LDAP.
             result = self.submit_reg_form_for_user(email,
                                                    password,
                                                    realm_name=realm_name,
@@ -1172,7 +1326,22 @@ class UserSignUpTest(ZulipTestCase):
                                                    from_confirmation='1',
                                                    # Pass HTTP_HOST for the target subdomain
                                                    HTTP_HOST=subdomain + ".testserver")
+            self.assert_in_success_response(["You're almost there.",
+                                             "New User Name",
+                                             "newuser@zulip.com"],
+                                            result)
 
+            # The full name be populated from the value of
+            # request.session['authenticated_full_name'] from LDAP in the case
+            # where from_confirmation and name_changes_disabled are both False.
+            with patch('zerver.views.registration.name_changes_disabled', return_value=True):
+                result = self.submit_reg_form_for_user(email,
+                                                       password,
+                                                       full_name="Non LDAP Full Name",
+                                                       realm_name=realm_name,
+                                                       realm_subdomain=subdomain,
+                                                       # Pass HTTP_HOST for the target subdomain
+                                                       HTTP_HOST=subdomain + ".testserver")
             self.assert_in_success_response(["You're almost there.",
                                              "New User Name",
                                              "newuser@zulip.com"],
@@ -1232,6 +1401,23 @@ class UserSignUpTest(ZulipTestCase):
 
         result = self.client_get(confirmation_url)
         self.assertEqual(result.status_code, 200)
+
+        # If the mirror dummy user is already active, attempting to submit the
+        # registration form should just redirect to a login page.
+        user_profile.is_active = True
+        user_profile.save()
+        result = self.submit_reg_form_for_user(email,
+                                               password,
+                                               realm_name=realm_name,
+                                               realm_subdomain=subdomain,
+                                               from_confirmation='1',
+                                               # Pass HTTP_HOST for the target subdomain
+                                               HTTP_HOST=subdomain + ".testserver")
+        self.assertEqual(result.status_code, 302)
+        self.assertIn('login', result['Location'])
+        user_profile.is_active = False
+        user_profile.save()
+
         result = self.submit_reg_form_for_user(email,
                                                password,
                                                realm_name=realm_name,
@@ -1248,6 +1434,24 @@ class UserSignUpTest(ZulipTestCase):
                                                HTTP_HOST=subdomain + ".testserver")
         self.assertEqual(result.status_code, 302)
         self.assertEqual(get_session_dict_user(self.client.session), user_profile.id)
+
+    def test_registration_of_active_mirror_dummy_user(self):
+        # type: (Any) -> None
+        """
+        Trying to activate an already-active mirror dummy user should just
+        redirect to a login page.
+        """
+        email = "sipbtest@mit.edu"
+
+        user_profile = get_user_profile_by_email(email)
+        user_profile.is_mirror_dummy = True
+        user_profile.is_active = True
+        user_profile.save()
+
+        result = self.client_post('/register/', {'email': email})
+
+        self.assertEqual(result.status_code, 302)
+        self.assertIn('login', result['Location'])
 
 class TestOpenRealms(ZulipTestCase):
     def test_open_realm_logic(self):

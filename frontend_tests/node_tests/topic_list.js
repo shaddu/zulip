@@ -1,5 +1,6 @@
 add_dependencies({
     Handlebars: 'handlebars',
+    hash_util: 'js/hash_util',
     hashchange: 'js/hashchange',
     muting: 'js/muting',
     narrow: 'js/narrow',

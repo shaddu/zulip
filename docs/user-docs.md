@@ -8,11 +8,11 @@ maintaining such documentation highly efficient.
 ## Editing and testing
 
 The user documentation is available under `/help/` on any Zulip server;
-(e.g. [https://chat.zulip.org/help/](https://chat.zulip.org/help/) or
-`http://localhost:9991/help/` in the Zulip development environment). The
-user documentation is not hosted on ReadTheDocs, since Zulip supports
-running a server completely disconnected from the Internet, and we'd like
-the documentation to be available in that environment.
+(e.g. <https://chat.zulip.org/help/> or `http://localhost:9991/help/` in
+the Zulip development environment). The user documentation is not hosted on
+ReadTheDocs, since Zulip supports running a server completely disconnected
+from the Internet, and we'd like the documentation to be available in that
+environment.
 
  The source for this user documentation is the Markdown files under
 `templates/zerver/help/` in the
@@ -180,7 +180,7 @@ a new line to be formatted this way.
 You can refer to features in the Zulip UI by refrencing their names and
 their [FontAwesome](http://fontawesome.io) (version 3.0.2) text icons within
 parentheses. The source for the text icons is located in
-`static/styles/thirdparty-fonts.css`.
+`static/third/thirdparty-fonts.css`.
 
 * cog (<i class="fa fa-cog"></i>) icon — `cog (<i
 class="icon-vector-cog"></i>) icon`

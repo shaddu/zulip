@@ -70,7 +70,7 @@ $(function () {
         // lists.
         var message = ui.find_message(message_id);
 
-        unread_ui.mark_message_as_read(message);
+        unread_ops.mark_message_as_read(message);
         ui.update_starred(message.id, message.starred !== true);
         message_flags.send_starred([message], message.starred);
     }
@@ -92,7 +92,7 @@ $(function () {
         e.preventDefault();
         var stream = stream_data.get_sub_by_id($(this).attr('data-stream-id'));
         if (stream) {
-            window.location.href = '/#narrow/stream/' + hashchange.encodeHashComponent(stream.name);
+            window.location.href = '/#narrow/stream/' + hash_util.encodeHashComponent(stream.name);
             return;
         }
         window.location.href = $(this).attr('href');
@@ -102,7 +102,7 @@ $(function () {
 
     $('body').on('click', '.notification', function () {
         var payload = $(this).data("narrow");
-        ui.change_tab_to('#home');
+        ui_util.change_tab_to('#home');
         narrow.activate(payload.raw_operators, payload.opts_notif);
     });
 
@@ -151,12 +151,19 @@ $(function () {
         e.stopPropagation();
         popovers.hide_all();
     });
+    $("body").on("click", ".copy_message", function (e) {
+        $(this).attr("data-original-title", "Copied!");
+        $(this).tooltip().tooltip('show');
+        var row = $(this).closest(".message_row");
+        message_edit.end(row);
+        e.preventDefault();
+        e.stopPropagation();
+    });
     $("body").on("click", "a", function () {
         if (document.activeElement === this) {
-            ui.blur_active_element();
+            ui_util.blur_active_element();
         }
     });
-
 
     // MUTING
 
@@ -165,7 +172,7 @@ $(function () {
         var stream_id = $(e.currentTarget).attr('data-stream-id');
         var topic = $(e.currentTarget).attr('data-topic-name');
         var stream = stream_data.get_sub_by_id(stream_id);
-        stream_popover.topic_ops.mute(stream.name, topic);
+        muting_ui.mute(stream.name, topic);
     });
 
     // RECIPIENT BARS
@@ -227,7 +234,7 @@ $(function () {
     $('#user_presences').expectOne().on('click', '.selectable_sidebar_block', function (e) {
         var user_id = $(e.target).parents('li').attr('data-user-id');
         var email = people.get_person_from_user_id(user_id).email;
-
+        activity.escape_search();
         narrow.by('pm-with', email, {select_first_unread: true, trigger: 'sidebar'});
         // The preventDefault is necessary so that clicking the
         // link doesn't jump us to the top of the page.
@@ -263,7 +270,7 @@ $(function () {
 
     // Capture both the left-sidebar Home click and the tab breadcrumb Home
     $(document).on('click', ".home-link[data-name='home']", function (e) {
-        ui.change_tab_to('#home');
+        ui_util.change_tab_to('#home');
         narrow.deactivate();
         // We need to maybe scroll to the selected message
         // once we have the proper viewport set up
@@ -272,8 +279,8 @@ $(function () {
     });
 
     $(".brand").on('click', function (e) {
-        if (ui.home_tab_obscured()) {
-            ui.change_tab_to('#home');
+        if (ui_state.home_tab_obscured()) {
+            ui_util.change_tab_to('#home');
         } else {
             narrow.restore_home_state();
         }
@@ -314,18 +321,18 @@ $(function () {
 
 
     $('.compose_stream_button').click(function () {
-        compose.start('stream', {trigger: 'new topic button'});
+        compose_actions.start('stream', {trigger: 'new topic button'});
     });
     $('.compose_private_button').click(function () {
-        compose.start('private');
+        compose_actions.start('private');
     });
 
     $('.empty_feed_compose_stream').click(function (e) {
-        compose.start('stream', {trigger: 'empty feed message'});
+        compose_actions.start('stream', {trigger: 'empty feed message'});
         e.preventDefault();
     });
     $('.empty_feed_compose_private').click(function (e) {
-        compose.start('private', {trigger: 'empty feed message'});
+        compose_actions.start('private', {trigger: 'empty feed message'});
         e.preventDefault();
     });
 
@@ -354,7 +361,7 @@ $(function () {
     $(".compose-content").click(handle_compose_click);
 
     $("#compose_close").click(function () {
-        compose.cancel();
+        compose_actions.cancel();
     });
 
     $("#join_unsub_stream").click(function (e) {
@@ -369,15 +376,17 @@ $(function () {
     // Keep these 2 feedback bot triggers separate because they have to
     // propagate the event differently.
     $('.feedback').click(function () {
-        compose.start('private', {private_message_recipient: 'feedback@zulip.com',
-                                  trigger: 'feedback menu item'});
+        compose_actions.start('private', {
+            private_message_recipient: 'feedback@zulip.com',
+            trigger: 'feedback menu item'});
 
     });
     $('#feedback_button').click(function (e) {
         e.stopPropagation();
         popovers.hide_all();
-        compose.start('private', {private_message_recipient: 'feedback@zulip.com',
-                                  trigger: 'feedback button'});
+        compose_actions.start('private', {
+            private_message_recipient: 'feedback@zulip.com',
+            trigger: 'feedback button'});
 
     });
 
@@ -421,12 +430,6 @@ $(function () {
     });
     // End Webathena code
 
-    // BANKRUPTCY
-
-    $(".bankruptcy_button").click(function () {
-        unread_ui.enable();
-    });
-
     (function () {
         var map = {
             ".stream-description-editable": subs.change_stream_description,
@@ -455,6 +458,15 @@ $(function () {
 
         $(document).on("keydown", ".editable-section", function (e) {
             e.stopPropagation();
+            // Cancel editing description if Escape key is pressed.
+            if (e.which === 27) {
+                $("[data-finish-editing='.stream-description-editable']").hide();
+                $(this).attr("contenteditable", false);
+                $(this).text($(this).attr("data-prev-text"));
+                $("[data-make-editable]").html("");
+            } else if (e.which === 13) {
+                $(this).siblings(".checkmark").click();
+            }
         });
 
         $(document).on("drop", ".editable-section", function () {
@@ -465,9 +477,11 @@ $(function () {
             // if there are any child nodes, inclusive of <br> which means you
             // have lines in your description or title, you're doing something
             // wrong.
-            if (this.hasChildNodes()) {
-                this.innerText = this.innerText;
-                place_caret_at_end(this);
+            for (var x = 0; x < this.childNodes.length; x += 1) {
+                if (this.childNodes[x].nodeType !== 3) {
+                    this.innerText = this.innerText.replace(/\n/, "");
+                    break;
+                }
             }
         });
 
@@ -502,45 +516,6 @@ $(function () {
         });
     }());
 
-    $('#yes-bankrupt').click(function () {
-        pointer.fast_forward_pointer();
-        $("#yes-bankrupt").hide();
-        $("#no-bankrupt").hide();
-        $(this).after($("<div>").addClass("alert alert-info settings_committed")
-                      .text(i18n.t("Bringing you to your latest messages…")));
-    });
-
-    (function () {
-        $("#main_div").on("click", ".message_inline_image a", function (e) {
-            var img = e.target;
-            var row = rows.id($(img).closest(".message_row"));
-            var user = current_msg_list.get(row).sender_full_name;
-            var $target = $(this);
-
-            // prevent the link from opening in a new page.
-            e.preventDefault();
-            // prevent the message compose dialog from happening.
-            e.stopPropagation();
-
-            if ($target.parent().hasClass("youtube-video")) {
-                ui.lightbox({
-                    type: "youtube",
-                    id: $target.data("id"),
-                });
-            } else {
-                ui.lightbox({
-                    type: "photo",
-                    image: img,
-                    user: user,
-                });
-            }
-        });
-
-        $("#overlay .download").click(function () {
-          this.blur();
-        });
-    }());
-
     // MAIN CLICK HANDLER
 
     $(document).on('click', function (e) {
@@ -558,11 +533,11 @@ $(function () {
 
         // Unfocus our compose area if we click out of it. Don't let exits out
         // of modals or selecting text (for copy+paste) trigger cancelling.
-        if (compose.composing() && !$(e.target).is("a") &&
+        if (compose_state.composing() && !$(e.target).is("a") &&
             ($(e.target).closest(".modal").length === 0) &&
             window.getSelection().toString() === "" &&
             ($(e.target).closest('#emoji_map').length === 0)) {
-            compose.cancel();
+            compose_actions.cancel();
         }
     });
 

@@ -17,7 +17,7 @@ previews, group private messages, audible notifications,
 missed-message emails, desktop apps, and much more.
 
 Further information on the Zulip project and its features can be found
-at [https://www.zulip.org](https://www.zulip.org).
+at <https://www.zulip.org>.
 
 [![Build Status](https://travis-ci.org/zulip/zulip.svg?branch=master)](https://travis-ci.org/zulip/zulip) [![Coverage Status](https://coveralls.io/repos/github/zulip/zulip/badge.svg?branch=master)](https://coveralls.io/github/zulip/zulip?branch=master) [![docs](https://readthedocs.org/projects/zulip/badge/?version=latest)](http://zulip.readthedocs.io/en/latest/) [![Zulip chat](https://img.shields.io/badge/zulip-join_chat-brightgreen.svg)](https://chat.zulip.org)
 
@@ -66,7 +66,7 @@ installation guide][dev-install].
 Zulip in production supports Ubuntu 14.04 Trusty and Ubuntu 16.04
 Xenial. Work is ongoing on adding support for additional
 platforms. The installation process is documented at
-https://zulip.org/server.html and in more detail in [the
+<https://zulip.org/server.html> and in more detail in [the
 documentation](https://zulip.readthedocs.io/en/latest/prod-install.html).
 
 ## Ways to contribute
@@ -166,6 +166,15 @@ and are participating in 2017 as well.  For guidance, please read
 and feel free to email
 [our GSoC mailing list](https://groups.google.com/forum/#!forum/zulip-gsoc).
 
+**Note**: For GSoC 2017, we will be focused on making our
+[React Native app](https://github.com/zulip/zulip-mobile) better
+rather than developing the
+[Java Android app](https://github.com/zulip/zulip-android) and
+[React Native app](https://github.com/zulip/zulip-mobile) in
+parallel. You can review
+[our detailed plan](https://github.com/zulip/zulip-android/blob/master/android-strategy.md)
+for further details on the motivation and logistics.
+
 ## How to get involved with contributing to Zulip
 
 First, subscribe to the Zulip [development discussion mailing
@@ -213,7 +222,7 @@ Another way to find issues in Zulip is to take advantage of our
 our issues into areas like admin, compose, emoji, hotkeys, i18n,
 onboarding, search, etc.  You can see this here:
 
-[https://github.com/zulip/zulip/labels]
+<https://github.com/zulip/zulip/labels>
 
 Click on any of the "area:" labels and you will see all the tickets
 related to your area of interest.
@@ -226,7 +235,12 @@ label the issue as **in progress**. For more details, check out
 
 You're encouraged to ask questions on how to best implement or debug
 your changes -- the Zulip maintainers are excited to answer questions
-to help you stay unblocked and working efficiently.
+to help you stay unblocked and working efficiently. It's great to ask
+questions in comments on GitHub issues and pull requests, or [on
+chat.zulip.org](https://zulip.readthedocs.io/en/latest/chat-zulip-org.html). We'll
+direct longer discussions to Zulip chat, but please post a summary of
+what you learned from the chat, or link to the conversation, in a
+comment on the GitHub issue.
 
 We also welcome suggestions of features that you feel would be
 valuable or changes that you feel would make Zulip a better open

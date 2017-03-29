@@ -1,6 +1,7 @@
 global.stub_out_jquery();
 
 add_dependencies({
+    hash_util: 'js/hash_util.js',
     hashchange: 'js/hashchange.js',
     people: 'js/people.js',
     stream_data: 'js/stream_data.js',
@@ -131,7 +132,7 @@ function set_filter(operators) {
     uri = narrow.by_sender_uri(ray.email);
     assert.equal(uri, '#narrow/sender/22-ray');
 
-    var emails = global.hashchange.decode_operand('pm-with', '22,23-group');
+    var emails = global.hash_util.decode_operand('pm-with', '22,23-group');
     assert.equal(emails, 'alice@example.com,ray@example.com');
 }());
 
@@ -220,4 +221,3 @@ function set_filter(operators) {
     assert.deepEqual(filter.operands('sender'), ['showell@foo.com']);
     assert.deepEqual(filter.operands('stream'), ['steve@foo.com']);
 }());
-

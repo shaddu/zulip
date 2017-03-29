@@ -79,7 +79,7 @@ function get_user_list_item(user_id) {
 
 function get_filter_li(user_ids_string) {
     if (name.indexOf(",") < 0) {
-        get_user_list_item(user_ids_string);
+        return  get_user_list_item(user_ids_string);
     }
     return $("li.group-pms-sidebar-entry[data-user-ids='" + user_ids_string + "']");
 }
@@ -400,10 +400,14 @@ exports.update_huddles = function () {
 
 function status_from_timestamp(baseline_time, presence) {
     var status = 'offline';
+    var last_active = 0;
     var mobileAvailable = false;
     var nonmobileAvailable = false;
     _.each(presence, function (device_presence, device) {
         var age = baseline_time - device_presence.timestamp;
+        if (last_active < device_presence.timestamp) {
+            last_active = device_presence.timestamp;
+        }
         if (is_mobile(device)) {
             mobileAvailable = device_presence.pushable || mobileAvailable;
         }
@@ -432,7 +436,9 @@ function status_from_timestamp(baseline_time, presence) {
             }
         }
     });
-    return {status: status, mobile: !nonmobileAvailable && mobileAvailable };
+    return {status: status,
+            mobile: !nonmobileAvailable && mobileAvailable,
+            last_active: last_active };
 }
 
 // For testing
@@ -589,8 +595,9 @@ function maybe_select_person(e) {
             // undefined if there are no results
             var email = people.get_person_from_user_id(topPerson).email;
             narrow.by('pm-with', email, {select_first_unread: true, trigger: 'user sidebar'});
-            compose.start('private',
-                    {trigger: 'sidebar enter key', private_message_recipient: email});
+            compose_actions.start('private', {
+                trigger: 'sidebar enter key',
+                private_message_recipient: email});
         }
         // Clear the user filter
         exports.escape_search();

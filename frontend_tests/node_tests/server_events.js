@@ -38,7 +38,7 @@ var server_events = require('js/server_events.js');
 
 var setup = function (results) {
     server_events.home_view_loaded();
-    set_global('message_store', {
+    set_global('message_events', {
         insert_new_messages: function () {
             throw Error('insert error');
         },
@@ -46,8 +46,8 @@ var setup = function (results) {
             throw Error('update error');
         },
     });
-    set_global('subs', {
-        update_subscription_properties: function () {
+    set_global('stream_events', {
+        update_property: function () {
             throw Error('subs update error');
         },
     });

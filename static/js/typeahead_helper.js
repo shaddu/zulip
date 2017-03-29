@@ -2,6 +2,17 @@ var typeahead_helper = (function () {
 
 var exports = {};
 
+// Returns an array of private message recipients, removing empty elements.
+// For example, "a,,b, " => ["a", "b"]
+exports.get_cleaned_pm_recipients = function (query_string) {
+    var recipients = util.extract_pm_recipients(query_string);
+    recipients = _.filter(recipients, function (elem) {
+        return elem.match(/\S/);
+    });
+    return recipients;
+};
+
+
 // Loosely based on Bootstrap's default highlighter, but with escaping added.
 exports.highlight_with_escaping = function (query, item) {
     // query: The text currently in the searchbox
@@ -110,14 +121,13 @@ function prefix_sort(query, objs, get_item) {
 
 }
 
-function split_by_subscribers(people) {
+function split_by_subscribers(people, current_stream) {
     var subscribers = [];
     var non_subscribers = [];
-    var current_stream = compose.stream_name();
 
     if (!stream_data.get_sub(current_stream)) {
         // If there is no stream specified, everyone is considered as a subscriber.
-        return {subs: people, non_subs: []};
+        return {subscribers: people, non_subscribers: []};
     }
 
     _.each(people, function (person) {
@@ -130,7 +140,7 @@ function split_by_subscribers(people) {
         }
     });
 
-    return {subs: subscribers, non_subs: non_subscribers};
+    return {subscribers: subscribers, non_subscribers: non_subscribers};
 }
 
 exports.sorter = function (query, objs, get_item) {
@@ -164,21 +174,26 @@ exports.compare_by_pms = function (user_a, user_b) {
     return 1;
 };
 
-exports.sort_for_at_mentioning = function (objs) {
-    var objs_split = split_by_subscribers(objs);
+exports.sort_for_at_mentioning = function (objs, current_stream) {
+    var objs_split = split_by_subscribers(objs, current_stream);
 
-    var subs_sorted = objs_split.subs.sort(exports.compare_by_pms);
-    var non_subs_sorted = objs_split.non_subs.sort(exports.compare_by_pms);
+    var subs_sorted = objs_split.subscribers.sort(exports.compare_by_pms);
+    var non_subs_sorted = objs_split.non_subscribers.sort(exports.compare_by_pms);
     return subs_sorted.concat(non_subs_sorted);
 };
 
-exports.sort_recipients = function (matches, query) {
+exports.sort_recipients = function (matches, query, current_stream) {
     var name_results =  prefix_sort(query, matches, function (x) { return x.full_name; });
     var email_results = prefix_sort(query, name_results.rest, function (x) { return x.email; });
 
-    var matches_sorted =
-        exports.sort_for_at_mentioning(name_results.matches.concat(email_results.matches));
-    var rest_sorted = exports.sort_for_at_mentioning(email_results.rest);
+    var matches_sorted = exports.sort_for_at_mentioning(
+        name_results.matches.concat(email_results.matches),
+        current_stream
+    );
+    var rest_sorted = exports.sort_for_at_mentioning(
+        email_results.rest,
+        current_stream
+    );
     return matches_sorted.concat(rest_sorted);
 };
 
@@ -207,11 +222,11 @@ exports.sort_streams = function (matches, query) {
     return name_results.matches.concat(desc_results.matches.concat(desc_results.rest));
 };
 
-exports.sort_recipientbox_typeahead = function (matches) {
+exports.sort_recipientbox_typeahead = function (query, matches, current_stream) {
     // input_text may be one or more pm recipients
-    var cleaned = composebox_typeahead.get_cleaned_pm_recipients(this.query);
-    var query = cleaned[cleaned.length - 1];
-    return exports.sort_recipients(matches, query);
+    var cleaned = exports.get_cleaned_pm_recipients(query);
+    query = cleaned[cleaned.length - 1];
+    return exports.sort_recipients(matches, query, current_stream);
 };
 
 return exports;

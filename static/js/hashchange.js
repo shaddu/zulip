@@ -1,45 +1,10 @@
+// Read https://zulip.readthedocs.io/en/latest/hashchange-system.html
 var hashchange = (function () {
 
 var exports = {};
 
 var expected_hash;
 var changing_hash = false;
-
-// Some browsers zealously URI-decode the contents of
-// window.location.hash.  So we hide our URI-encoding
-// by replacing % with . (like MediaWiki).
-
-exports.encodeHashComponent = function (str) {
-    return encodeURIComponent(str)
-        .replace(/\./g, '%2E')
-        .replace(/%/g,  '.');
-};
-
-exports.encode_operand = function (operator, operand) {
-    if ((operator === 'pm-with') || (operator === 'sender')) {
-        var slug = people.emails_to_slug(operand);
-        if (slug) {
-            return slug;
-        }
-    }
-
-    return exports.encodeHashComponent(operand);
-};
-
-function decodeHashComponent(str) {
-    return decodeURIComponent(str.replace(/\./g, '%'));
-}
-
-exports.decode_operand = function (operator, operand) {
-    if ((operator === 'pm-with') || (operator === 'sender')) {
-        var emails = people.slug_to_emails(operand);
-        if (emails) {
-            return emails;
-        }
-    }
-
-    return decodeHashComponent(operand);
-};
 
 function set_hash(hash) {
     var location = window.location;
@@ -88,8 +53,8 @@ exports.operators_to_hash = function (operators) {
             var operand = elem.operand;
 
             var sign = elem.negated ? '-' : '';
-            hash += '/' + sign + hashchange.encodeHashComponent(operator)
-                  + '/' + hashchange.encode_operand(operator, operand);
+            hash += '/' + sign + hash_util.encodeHashComponent(operator)
+                  + '/' + hash_util.encode_operand(operator, operand);
         });
     }
 
@@ -111,8 +76,8 @@ exports.parse_narrow = function (hash) {
         // We don't construct URLs with an odd number of components,
         // but the user might write one.
         try {
-            var operator = decodeHashComponent(hash[i]);
-            var operand  = exports.decode_operand(operator, hash[i+1] || '');
+            var operator = hash_util.decodeHashComponent(hash[i]);
+            var operand  = hash_util.decode_operand(operator, hash[i+1] || '');
             var negated = false;
             if (operator[0] === '-') {
                 negated = true;
@@ -127,7 +92,7 @@ exports.parse_narrow = function (hash) {
 };
 
 function activate_home_tab() {
-    ui.change_tab_to("#home");
+    ui_util.change_tab_to("#home");
     narrow.deactivate();
     floating_recipient_bar.update();
 }
@@ -156,7 +121,7 @@ function do_hashchange(from_reload) {
     var hash = window.location.hash.split("/");
     switch (hash[0]) {
     case "#narrow":
-        ui.change_tab_to("#home");
+        ui_util.change_tab_to("#home");
         var operators = exports.parse_narrow(hash);
         if (operators === undefined) {
             // If the narrow URL didn't parse, clear
@@ -182,16 +147,16 @@ function do_hashchange(from_reload) {
         activate_home_tab();
         break;
     case "#streams":
-        ui.change_tab_to("#streams");
+        ui_util.change_tab_to("#streams");
         break;
     case "#drafts":
-        ui.change_tab_to("#drafts");
+        ui_util.change_tab_to("#drafts");
         break;
     case "#administration":
-        ui.change_tab_to("#administration");
+        ui_util.change_tab_to("#administration");
         break;
     case "#settings":
-        ui.change_tab_to("#settings");
+        ui_util.change_tab_to("#settings");
         break;
     }
     return false;
@@ -255,7 +220,7 @@ var get_hash_group = (function () {
 }());
 
 function should_ignore(hash) {
-    // Hash changes within this list are overlaws and should not unnarrow (etc.)
+    // Hash changes within this list are overlays and should not unnarrow (etc.)
     var ignore_list = ["streams", "drafts", "settings", "administration", "invite"];
     var main_hash = get_main_hash(hash);
 
@@ -331,7 +296,7 @@ exports.close_modals = function () {
 
 exports.exit_modal = function (callback) {
     if (should_ignore(window.location.hash)) {
-        ui.blur_active_element();
+        ui_util.blur_active_element();
         ignore.flag = true;
         window.location.hash = ignore.prev || "#";
         if (typeof callback === "function") {

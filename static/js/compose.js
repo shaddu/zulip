@@ -195,36 +195,39 @@ function fill_in_opts_from_current_narrowed_view(msg_type, opts) {
     };
 
     // Set default parameters based on the current narrowed view.
-    narrow.set_compose_defaults(default_opts);
+    narrow_state.set_compose_defaults(default_opts);
     opts = _.extend(default_opts, opts);
     return opts;
 }
 
 function same_recipient_as_before(msg_type, opts) {
-    return (compose.composing() === msg_type) &&
+    return (compose_state.composing() === msg_type) &&
             ((msg_type === "stream" &&
               opts.stream === compose.stream_name() &&
               opts.subject === compose.subject()) ||
              (msg_type === "private" &&
-              opts.private_message_recipient === compose.recipient()));
+              opts.private_message_recipient === compose_state.recipient()));
 }
 
-function show_box_for_msg_type(msg_type, opts) {
-    var focus_area;
-
+function get_focus_area(msg_type, opts) {
+    // Set focus to "Topic" when narrowed to a stream+topic and "New topic" button clicked.
     if (msg_type === 'stream' && opts.stream && ! opts.subject) {
-        focus_area = 'subject';
+        return 'subject';
     } else if ((msg_type === 'stream' && opts.stream)
                || (msg_type === 'private' && opts.private_message_recipient)) {
-        focus_area = 'new_message_content';
+        if (opts.trigger === "new topic button") {
+            return 'subject';
+        }
+        return 'new_message_content';
     }
 
     if (msg_type === 'stream') {
-        show_box('stream', $("#" + (focus_area || 'stream')), opts);
-    } else {
-        show_box('private', $("#" + (focus_area || 'private_message_recipient')), opts);
+        return 'stream';
     }
+    return 'private_message_recipient';
 }
+// Export for testing
+exports._get_focus_area = get_focus_area;
 
 exports.start = function (msg_type, opts) {
     $("#new_message_content").autosize();
@@ -245,7 +248,7 @@ exports.start = function (msg_type, opts) {
         opts.private_message_recipient = '';
     }
 
-    if (compose.composing() && !same_recipient_as_before(msg_type, opts)) {
+    if (compose_state.composing() && !same_recipient_as_before(msg_type, opts)) {
         // Clear the compose box if the existing message is to a different recipient
         clear_box();
     }
@@ -254,7 +257,7 @@ exports.start = function (msg_type, opts) {
     compose.subject(opts.subject);
 
     // Set the recipients with a space after each comma, so it looks nice.
-    compose.recipient(opts.private_message_recipient.replace(/,\s*/g, ", "));
+    compose_state.recipient(opts.private_message_recipient.replace(/,\s*/g, ", "));
 
     // If the user opens the compose box, types some text, and then clicks on a
     // different stream/subject, we want to keep the text in the compose box
@@ -262,17 +265,13 @@ exports.start = function (msg_type, opts) {
         compose.message_content(opts.content);
     }
 
-    ui.change_tab_to("#home");
+    ui_util.change_tab_to("#home");
 
     is_composing_message = msg_type;
 
-    // Set focus to "Topic" when narrowed to a stream+topic and "New topic" button clicked.
-    if (opts.trigger === "new topic button") {
-        show_box('stream', $("#subject"), opts);
-    } else {
-        // Show either stream/topic fields or "You and" field.
-        show_box_for_msg_type(msg_type, opts);
-    }
+    // Show either stream/topic fields or "You and" field.
+    var focus_area = get_focus_area(msg_type, opts);
+    show_box(msg_type, $("#" + focus_area), opts);
 
     compose_fade.start_compose(msg_type);
 
@@ -329,7 +328,7 @@ function create_message_object() {
 
     // Changes here must also be kept in sync with echo.try_deliver_locally
     var message = {
-        type: compose.composing(),
+        type: compose_state.composing(),
         content: content,
         sender_id: page_params.user_id,
         queue_id: page_params.event_queue_id,
@@ -339,7 +338,7 @@ function create_message_object() {
 
     if (message.type === "private") {
         // TODO: this should be collapsed with the code in composebox_typeahead.js
-        var recipient = compose.recipient();
+        var recipient = compose_state.recipient();
         var emails = util.extract_pm_recipients(recipient);
         message.to = emails;
         message.reply_to = recipient;
@@ -359,7 +358,7 @@ function create_message_object() {
 }
 
 exports.snapshot_message = function () {
-    if (!exports.composing() || (exports.message_content() === "")) {
+    if (!compose_state.composing() || (exports.message_content() === "")) {
         // If you aren't in the middle of composing the body of a
         // message, don't try to snapshot.
         return;
@@ -608,7 +607,7 @@ exports.respond_to_message = function (opts) {
         return;
     }
 
-    unread_ui.mark_message_as_read(message);
+    unread_ops.mark_message_as_read(message);
 
     var stream = '';
     var subject = '';
@@ -633,7 +632,7 @@ exports.respond_to_message = function (opts) {
     } else {
         msg_type = message.type;
     }
-    compose.start(msg_type, {stream: stream, subject: subject,
+    compose_actions.start(msg_type, {stream: stream, subject: subject,
                              private_message_recipient: pm_recipient,
                              replying_to_message: message,
                              trigger: opts.trigger});
@@ -736,6 +735,26 @@ exports.update_email = function (user_id, new_email) {
     exports.recipient(reply_to);
 };
 
+exports.get_invalid_recipient_emails = function () {
+    var private_recipients = util.extract_pm_recipients(compose_state.recipient());
+    var invalid_recipients = [];
+    _.each(private_recipients, function (email) {
+        // This case occurs when exports.recipient() ends with ','
+        if (email === "") {
+            return;
+        }
+        if (people.realm_get(email) !== undefined) {
+            return;
+        }
+        if (people.is_cross_realm_email(email)) {
+            return;
+        }
+        invalid_recipients.push(email);
+    });
+
+    return invalid_recipients;
+};
+
 // Checks if a stream exists. If not, displays an error and returns
 // false.
 function check_stream_for_send(stream_name, autosubscribe) {
@@ -823,6 +842,7 @@ function validate_stream_message() {
 
     return true;
 }
+
 // The function checks whether the recipients are users of the realm or cross realm users (bots
 // for now)
 function validate_private_message() {
@@ -833,22 +853,10 @@ function validate_private_message() {
         // For Zephyr mirroring realms, the frontend doesn't know which users exist
         return true;
     }
-    var private_recipients = util.extract_pm_recipients(compose.recipient());
-    var invalid_recipients = [];
+
+    var invalid_recipients = exports.get_invalid_recipient_emails();
+
     var context = {};
-    _.each(private_recipients, function (email) {
-        // This case occurs when exports.recipient() ends with ','
-        if (email === "") {
-            return;
-        }
-        if (people.realm_get(email) !== undefined) {
-            return;
-        }
-        if (people.is_cross_realm_email(email)) {
-            return;
-        }
-        invalid_recipients.push(email);
-    });
     if (invalid_recipients.length === 1) {
         context = {recipient: invalid_recipients.join()};
         compose_error(i18n.t("The recipient __recipient__ is not valid ", context), $("#private_message_recipient"));
@@ -1160,8 +1168,8 @@ $(function () {
         var filename = split_uri[split_uri.length - 1];
         // Urgh, yet another hack to make sure we're "composing"
         // when text gets added into the composebox.
-        if (!compose.composing()) {
-            compose.start('stream');
+        if (!compose_state.composing()) {
+            compose_actions.start('stream');
         }
 
         var uri = make_upload_absolute(response.uri);
@@ -1211,8 +1219,8 @@ $(function () {
         uploadFinished: uploadFinished,
         rawDrop: function (contents) {
             var textbox = $("#new_message_content");
-            if (!compose.composing()) {
-                compose.start('stream');
+            if (!compose_state.composing()) {
+                compose_actions.start('stream');
             }
             textbox.val(textbox.val() + contents);
             exports.autosize_textarea();
@@ -1221,9 +1229,9 @@ $(function () {
 
     if (page_params.narrow !== undefined) {
         if (page_params.narrow_topic !== undefined) {
-            compose.start("stream", {subject: page_params.narrow_topic});
+            compose_actions.start("stream", {subject: page_params.narrow_topic});
         } else {
-            compose.start("stream", {});
+            compose_actions.start("stream", {});
         }
     }
 

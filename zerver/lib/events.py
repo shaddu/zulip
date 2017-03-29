@@ -73,7 +73,7 @@ def fetch_initial_state_data(user_profile, event_types, queue_id,
         state['attachments'] = user_attachments(user_profile)
 
     if want('message'):
-        # The client should use get_old_messages() to fetch messages
+        # The client should use get_messages() to fetch messages
         # starting with the max_message_id.  They will get messages
         # newer than that ID via get_events()
         messages = Message.objects.filter(usermessage__user_profile=user_profile).order_by('-id')[:1]
@@ -93,14 +93,18 @@ def fetch_initial_state_data(user_profile, event_types, queue_id,
 
     if want('realm'):
         state['realm_name'] = user_profile.realm.name
+        state['realm_description'] = user_profile.realm.description
         state['realm_restricted_to_domain'] = user_profile.realm.restricted_to_domain
         state['realm_invite_required'] = user_profile.realm.invite_required
         state['realm_invite_by_admins_only'] = user_profile.realm.invite_by_admins_only
+        state['realm_inline_image_preview'] = user_profile.realm.inline_image_preview
+        state['realm_inline_url_embed_preview'] = user_profile.realm.inline_url_embed_preview
         state['realm_authentication_methods'] = user_profile.realm.authentication_methods_dict()
         state['realm_create_stream_by_admins_only'] = user_profile.realm.create_stream_by_admins_only
         state['realm_add_emoji_by_admins_only'] = user_profile.realm.add_emoji_by_admins_only
         state['realm_allow_message_editing'] = user_profile.realm.allow_message_editing
         state['realm_message_content_edit_limit_seconds'] = user_profile.realm.message_content_edit_limit_seconds
+        state['realm_message_retention_days'] = user_profile.realm.message_retention_days
         state['realm_default_language'] = user_profile.realm.default_language
         state['realm_waiting_period_threshold'] = user_profile.realm.waiting_period_threshold
         state['realm_icon_url'] = realm_icon_url(user_profile.realm)
@@ -150,9 +154,8 @@ def fetch_initial_state_data(user_profile, event_types, queue_id,
         state['twenty_four_hour_time'] = user_profile.twenty_four_hour_time
         state['left_side_userlist'] = user_profile.left_side_userlist
         state['emoji_alt_code'] = user_profile.emoji_alt_code
-
-        default_language = user_profile.default_language
-        state['default_language'] = default_language
+        state['timezone'] = user_profile.timezone
+        state['default_language'] = user_profile.default_language
 
     if want('update_global_notifications'):
         state['enable_stream_desktop_notifications'] = user_profile.enable_stream_desktop_notifications
@@ -236,6 +239,8 @@ def apply_event(state, event, user_profile, include_subscribers):
                         stream_data['subscribers'] = []
                     # Add stream to never_subscribed (if not invite_only)
                     state['never_subscribed'].append(stream_data)
+                state['streams'].append(stream)
+            state['streams'].sort(key=lambda elt: elt["name"])
 
         if event['op'] == 'delete':
             deleted_stream_ids = {stream['stream_id'] for stream in event['streams']}
@@ -381,6 +386,10 @@ def apply_event(state, event, user_profile, include_subscribers):
             state['left_side_userlist'] = event["setting"]
         if event['setting_name'] == 'emoji_alt_code':
             state['emoji_alt_code'] = event["setting"]
+        if event['setting_name'] == 'default_language':
+            state['default_language'] = event["setting"]
+        if event['setting_name'] == 'timezone':
+            state['timezone'] = event["setting"]
     elif event['type'] == "update_global_notifications":
         if event['notification_name'] == "enable_stream_desktop_notifications":
             state['enable_stream_desktop_notifications'] = event['setting']
@@ -399,7 +408,7 @@ def apply_event(state, event, user_profile, include_subscribers):
         elif event['notification_name'] == "enable_digest_emails":
             state['enable_digest_emails'] = event['setting']
     else:
-        raise ValueError("Unexpected event type %s" % (event['type'],))
+        raise AssertionError("Unexpected event type %s" % (event['type'],))
 
 def do_events_register(user_profile, user_client, apply_markdown=True,
                        event_types=None, queue_lifespan_secs=0, all_public_streams=False,

@@ -448,7 +448,7 @@ $(function () {
                 stream_li.addClass('active-filter');
             }
             rebuild_recent_topics(op_stream[0]);
-            unread_ui.process_visible();
+            unread_ops.process_visible();
         }
     });
 
@@ -473,8 +473,8 @@ $(function () {
         if (e.metaKey || e.ctrlKey) {
             return;
         }
-        if (ui.home_tab_obscured()) {
-            ui.change_tab_to('#home');
+        if (ui_state.home_tab_obscured()) {
+            ui_util.change_tab_to('#home');
         }
         var stream = $(e.target).parents('li').attr('data-name');
         popovers.hide_all();
@@ -534,8 +534,8 @@ function maybe_select_stream(e) {
         var topStream = $('#stream_filters li.narrow-filter').first().data('name');
         if (topStream !== undefined) {
             // undefined if there are no results
-            if (ui.home_tab_obscured()) {
-                ui.change_tab_to('#home');
+            if (ui_state.home_tab_obscured()) {
+                ui_util.change_tab_to('#home');
             }
             exports.clear_and_hide_search();
             narrow.by('stream', topStream, {select_first_unread: true, trigger: 'sidebar enter key'});
